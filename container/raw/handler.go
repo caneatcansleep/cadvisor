@@ -211,7 +211,7 @@ func (h *rawContainerHandler) getFsStats(stats *info.ContainerStats) error {
 			}
 		}
 	}
-
+	// 磁盘使用量这个指标不用关心
 	if h.includedMetrics.Has(container.DiskUsageMetrics) {
 		for i := range filesystems {
 			fs := filesystems[i]
@@ -227,10 +227,10 @@ func (h *rawContainerHandler) getFsStats(stats *info.ContainerStats) error {
 }
 
 func (h *rawContainerHandler) GetStats() (*info.ContainerStats, error) {
-	if *disableRootCgroupStats && isRootCgroup(h.name) {
+	if *disableRootCgroupStats && isRootCgroup(h.name) { // disableRootCgroupStats=false
 		return nil, nil
 	}
-	stats, err := h.libcontainerHandler.GetStats()
+	stats, err := h.libcontainerHandler.GetStats() // Handler.GetStats(cadvisor/container/libcontainer/handler.go)
 	if err != nil {
 		return stats, err
 	}

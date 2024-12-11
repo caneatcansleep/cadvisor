@@ -46,6 +46,8 @@ func NewInotifyWatcher() (*InotifyWatcher, error) {
 	}, nil
 }
 
+// dir="/sys/fs/cgroup/system.slice/docker-97310f07396bff98f1c1f90290f9f5ff3f630f346b00bdfd7f19fa6cadb27658.scope"
+// containerName="/system.slice/docker-97310f07396bff98f1c1f90290f9f5ff3f630f346b00bdfd7f19fa6cadb27658.scope"
 // Add a watch to the specified directory. Returns if the container was already being watched.
 func (iw *InotifyWatcher) AddWatch(containerName, dir string) (bool, error) {
 	iw.lock.Lock()

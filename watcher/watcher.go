@@ -42,6 +42,7 @@ type ContainerEvent struct {
 	WatchSource ContainerWatchSource
 }
 
+// 注释写的比较明确了，就是用来监听container事件的
 type ContainerWatcher interface {
 	// Registers a channel to listen for events affecting subcontainers (recursively).
 	Start(events chan ContainerEvent) error

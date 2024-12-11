@@ -92,6 +92,7 @@ type dockerContainerHandler struct {
 
 var _ container.ContainerHandler = &dockerContainerHandler{}
 
+// storageDir="/var/lib/docker", sd="overlay2"
 func getRwLayerID(containerID, storageDir string, sd StorageDriver, dockerVersion []int) (string, error) {
 	const (
 		// Docker version >=1.10.0 have a randomized ID for the root fs of a container.
@@ -101,7 +102,7 @@ func getRwLayerID(containerID, storageDir string, sd StorageDriver, dockerVersio
 	if (dockerVersion[0] <= 1) && (dockerVersion[1] < randomizedRWLayerMinorVersion) {
 		return containerID, nil
 	}
-
+	// 读取/var/lib/docker/image/overlay2/layerdb/mounts# cd 464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f/mount-id
 	bytes, err := os.ReadFile(path.Join(storageDir, "image", string(sd), "layerdb", "mounts", containerID, rwLayerIDFile))
 	if err != nil {
 		return "", fmt.Errorf("failed to identify the read-write layer ID for container %q. - %v", containerID, err)
@@ -112,11 +113,11 @@ func getRwLayerID(containerID, storageDir string, sd StorageDriver, dockerVersio
 // newDockerContainerHandler returns a new container.ContainerHandler
 func newDockerContainerHandler(
 	client *docker.Client,
-	name string,
+	name string, // name="/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
 	machineInfoFactory info.MachineInfoFactory,
 	fsInfo fs.FsInfo,
-	storageDriver StorageDriver,
-	storageDir string,
+	storageDriver StorageDriver, //"overlay2"
+	storageDir string, // "/var/lib/docker"
 	cgroupSubsystems map[string]string,
 	inHostNamespace bool,
 	metadataEnvAllowList []string,
@@ -126,7 +127,7 @@ func newDockerContainerHandler(
 	thinPoolWatcher *devicemapper.ThinPoolWatcher,
 	zfsWatcher *zfs.ZfsWatcher,
 ) (container.ContainerHandler, error) {
-	// Create the cgroup paths.
+	// cgroupPaths=map[string]string ["": "/sys/fs/cgroup/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope", ]
 	cgroupPaths := common.MakeCgroupPaths(cgroupSubsystems, name)
 
 	// Generate the equivalent cgroup manager for this container.
@@ -140,18 +141,19 @@ func newDockerContainerHandler(
 		rootFs = "/rootfs"
 		storageDir = path.Join(rootFs, storageDir)
 	}
-
+	// id="464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f", name="/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
 	id := dockerutil.ContainerNameToId(name)
 
 	// Add the Containers dir where the log files are stored.
 	// FIXME: Give `otherStorageDir` a more descriptive name.
-	otherStorageDir := path.Join(storageDir, pathToContainersDir, id)
+	otherStorageDir := path.Join(storageDir, pathToContainersDir, id) // "/var/lib/docker/containers/464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f"
 
 	rwLayerID, err := getRwLayerID(id, storageDir, storageDriver, dockerVersion)
 	if err != nil {
 		return nil, err
 	}
-
+	// rootfsStorageDir="/var/lib/docker/overlay2/6a3fe10dde48b8442c7b9864ce87eebb5c98a18a827d94d0342f855769591a2e/diff"
+	// zfsFilesystem="", zfsParent=""
 	// Determine the rootfs storage dir OR the pool name to determine the device.
 	// For devicemapper, we only need the thin pool name, and that is passed in to this call
 	rootfsStorageDir, zfsFilesystem, zfsParent, err := DetermineDeviceStorage(storageDriver, storageDir, rwLayerID)
@@ -171,11 +173,11 @@ func newDockerContainerHandler(
 	// TODO: extract object mother method
 	handler := &dockerContainerHandler{
 		machineInfoFactory: machineInfoFactory,
-		cgroupPaths:        cgroupPaths,
+		cgroupPaths:        cgroupPaths, // map[string]string ["": "/sys/fs/cgroup/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope", ]
 		fsInfo:             fsInfo,
-		storageDriver:      storageDriver,
-		poolName:           thinPoolName,
-		rootfsStorageDir:   rootfsStorageDir,
+		storageDriver:      storageDriver,    // overlay2
+		poolName:           thinPoolName,     // ""
+		rootfsStorageDir:   rootfsStorageDir, // "/var/lib/docker/overlay2/6a3fe10dde48b8442c7b9864ce87eebb5c98a18a827d94d0342f855769591a2e/diff"
 		envs:               make(map[string]string),
 		labels:             ctnr.Config.Labels,
 		includedMetrics:    metrics,
@@ -187,6 +189,8 @@ func newDockerContainerHandler(
 		// This should not happen, report the error just in case
 		return nil, fmt.Errorf("failed to parse the create timestamp %q for container %q: %v", ctnr.Created, id, err)
 	}
+	// rootFs="/",
+	// 没别的作用，就是创建一个对象
 	handler.libcontainerHandler = containerlibcontainer.NewHandler(cgroupManager, rootFs, ctnr.State.Pid, metrics)
 
 	// Add the name and bare ID as aliases of the container.

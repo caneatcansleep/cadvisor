@@ -113,6 +113,7 @@ func (w *rawContainerWatcher) Stop() error {
 	return <-w.stopWatcher
 }
 
+// dir="/sys/fs/cgroup/system.slice/docker-97310f07396bff98f1c1f90290f9f5ff3f630f346b00bdfd7f19fa6cadb27658.scope", containerName="/system.slice/docker-97310f07396bff98f1c1f90290f9f5ff3f630f346b00bdfd7f19fa6cadb27658.scope"
 // Watches the specified directory and all subdirectories. Returns whether the path was
 // already being watched and an error (if any).
 func (w *rawContainerWatcher) watchDirectory(events chan watcher.ContainerEvent, dir string, containerName string) (bool, error) {
@@ -121,6 +122,7 @@ func (w *rawContainerWatcher) watchDirectory(events chan watcher.ContainerEvent,
 	if strings.HasSuffix(containerName, ".mount") {
 		return false, nil
 	}
+	// InotifyWatcher.AddWatch
 	alreadyWatching, err := w.watcher.AddWatch(containerName, dir)
 	if err != nil {
 		return alreadyWatching, err
@@ -144,6 +146,7 @@ func (w *rawContainerWatcher) watchDirectory(events chan watcher.ContainerEvent,
 		return alreadyWatching, err
 	}
 	for _, entry := range entries {
+		// 这里的意思是递归watch该container的所有subcontainer
 		if entry.IsDir() {
 			entryPath := path.Join(dir, entry.Name())
 			subcontainerName := path.Join(containerName, entry.Name())
@@ -200,6 +203,7 @@ func (w *rawContainerWatcher) processEvent(event *inotify.Event, events chan wat
 			break
 		}
 	}
+	// containerName类似于"/system.slice/docker-97310f07396bff98f1c1f90290f9f5ff3f630f346b00bdfd7f19fa6cadb27658.scope"
 	if containerName == "" {
 		return fmt.Errorf("unable to detect container from watch event on directory %q", event.Name)
 	}

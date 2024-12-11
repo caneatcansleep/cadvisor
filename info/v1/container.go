@@ -85,6 +85,7 @@ type ContainerReference struct {
 	Id string `json:"id,omitempty"`
 
 	// The absolute name of the container. This is unique on the machine.
+	// "/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
 	Name string `json:"name"`
 
 	// Other names by which the container is known within a certain namespace.
@@ -93,6 +94,7 @@ type ContainerReference struct {
 
 	// Namespace under which the aliases of a container are unique.
 	// An example of a namespace is "docker" for Docker containers.
+	// such as "Docker"
 	Namespace string `json:"namespace,omitempty"`
 }
 
@@ -110,6 +112,8 @@ type ContainerInfoRequest struct {
 	// Default: 60
 	NumStats int `json:"num_stats,omitempty"`
 
+	// 需要解释下这里的start和end。因为cadvisor是以时间作为key保存一个container的一段时间内的stats的，
+	// 因此我们进行查询的时候可以提供我们希望查询的时间区间
 	// Start time for which to query information.
 	// If omitted, the beginning of time is assumed.
 	Start time.Time `json:"start,omitempty"`

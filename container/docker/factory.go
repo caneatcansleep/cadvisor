@@ -132,12 +132,13 @@ func (f *dockerFactory) String() string {
 	return DockerNamespace
 }
 
+// metadataEnvAllowList=[], inHostNamespace=true
 func (f *dockerFactory) NewContainerHandler(name string, metadataEnvAllowList []string, inHostNamespace bool) (handler container.ContainerHandler, err error) {
-	client, err := Client()
+	client, err := Client() // 创建一个docker client
 	if err != nil {
 		return
 	}
-
+	// dockerEnvMetadataWhiteList=""
 	dockerMetadataEnvAllowList := strings.Split(*dockerEnvMetadataWhiteList, ",")
 
 	// prefer using the unified metadataEnvAllowList

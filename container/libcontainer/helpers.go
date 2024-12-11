@@ -162,8 +162,8 @@ func NewCgroupManager(name string, paths map[string]string) (cgroups.Manager, er
 		Resources: &configs.Resources{},
 	}
 	if cgroups.IsCgroup2UnifiedMode() {
-		path := paths[""]
-		return fs2.NewManager(config, path)
+		path := paths[""]                   // path="/sys/fs/cgroup/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
+		return fs2.NewManager(config, path) // 创建runc/libcontainer的manager
 	}
 
 	return fs.NewManager(config, paths)

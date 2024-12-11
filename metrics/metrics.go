@@ -32,6 +32,7 @@ type metricValue struct {
 type metricValues []metricValue
 
 // infoProvider will usually be manager.Manager, but can be swapped out for testing.
+// 动态类型就是manager
 type infoProvider interface {
 	// GetRequestedContainersInfo gets info for all requested containers based on the request options.
 	GetRequestedContainersInfo(containerName string, options v2.RequestOptions) (map[string]*info.ContainerInfo, error)

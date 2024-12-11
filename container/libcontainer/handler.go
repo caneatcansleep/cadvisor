@@ -81,7 +81,7 @@ func (h *Handler) GetStats() (*info.ContainerStats, error) {
 			ignoreStatsError = true
 		}
 	}
-
+	// manager.GetStats(/root/go/pkg/mod/github.com/opencontainers/runc@v1.1.13/libcontainer/cgroups/fs2/fs2.go)
 	cgroupStats, err := h.cgroupManager.GetStats()
 	if err != nil {
 		if !ignoreStatsError {

@@ -29,6 +29,8 @@ import (
 	info "github.com/google/cadvisor/info/v2"
 )
 
+// 这里的代码不知道有啥用，暂时不关心
+
 // Usage fields we track for generating percentiles.
 type secondSample struct {
 	Timestamp time.Time // time when the sample was recorded.
@@ -160,6 +162,8 @@ func (s *StatsSummary) getDerivedUsage(n int) (info.Usage, error) {
 	return usage, nil
 }
 
+// manager.GetDerivedStats -> containerData.DerivedStats ->  StatsSummary.DerivedStats
+// 上面是调用链，这个大概与v2.0/summary这个接口有关，暂时不关心
 // Return the latest calculated derived stats.
 func (s *StatsSummary) DerivedStats() (info.DerivedStats, error) {
 	s.dataLock.RLock()

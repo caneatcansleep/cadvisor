@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// 这边主要是收集机器相关指标，暂时不用关心了
 var baseLabelsNames = []string{"machine_id", "system_uuid", "boot_id"}
 
 const (

@@ -498,6 +498,7 @@ func (m *manager) getAdjustedSpec(cinfo *containerInfo) info.ContainerSpec {
 	return spec
 }
 
+// 根据containerName获取containerData，然后再根据containerData获取containerInfo，最后返回containerInfo
 func (m *manager) GetContainerInfo(containerName string, query *info.ContainerInfoRequest) (*info.ContainerInfo, error) {
 	cont, err := m.getContainerData(containerName)
 	if err != nil {
@@ -507,6 +508,7 @@ func (m *manager) GetContainerInfo(containerName string, query *info.ContainerIn
 }
 
 func (m *manager) GetContainerInfoV2(containerName string, options v2.RequestOptions) (map[string]v2.ContainerInfo, error) {
+	// 根据options，从m.containers获取container（可能包含subcontainer）的containerData
 	containers, err := m.getRequestedContainers(containerName, options)
 	if err != nil {
 		return nil, err
@@ -518,6 +520,7 @@ func (m *manager) GetContainerInfoV2(containerName string, options v2.RequestOpt
 	infos := make(map[string]v2.ContainerInfo, len(containers))
 	for name, container := range containers {
 		result := v2.ContainerInfo{}
+		// 注意，此时获取的containerInfo并不包含stats
 		cinfo, err := container.GetInfo(false)
 		if err != nil {
 			errs.append(name, "GetInfo", err)
@@ -526,13 +529,14 @@ func (m *manager) GetContainerInfoV2(containerName string, options v2.RequestOpt
 		}
 		result.Spec = m.getV2Spec(cinfo)
 
+		// 获取stats
 		stats, err := m.memoryCache.RecentStats(name, nilTime, nilTime, options.Count)
 		if err != nil {
 			errs.append(name, "RecentStats", err)
 			infos[name] = result
 			continue
 		}
-
+		// 将v1的stats转为v2的stats
 		result.Stats = v2.ContainerStatsFromV1(containerName, &cinfo.Spec, stats)
 		infos[name] = result
 	}
@@ -542,11 +546,13 @@ func (m *manager) GetContainerInfoV2(containerName string, options v2.RequestOpt
 
 func (m *manager) containerDataToContainerInfo(cont *containerData, query *info.ContainerInfoRequest) (*info.ContainerInfo, error) {
 	// Get the info from the container.
+	// 注意，此时返回的containerInfo并不包含container的stats
 	cinfo, err := cont.GetInfo(true)
 	if err != nil {
 		return nil, err
 	}
 
+	// 从内存获取container的近期的stats
 	stats, err := m.memoryCache.RecentStats(cinfo.Name, query.Start, query.End, query.NumStats)
 	if err != nil {
 		return nil, err
@@ -710,26 +716,30 @@ func (m *manager) GetRequestedContainersInfo(containerName string, options v2.Re
 func (m *manager) getRequestedContainers(containerName string, options v2.RequestOptions) (map[string]*containerData, error) {
 	containersMap := make(map[string]*containerData)
 	switch options.IdType {
-	case v2.TypeName:
+	case v2.TypeName: // "name"
 		if !options.Recursive {
+			// cont, ok := m.containers[namespacedContainerName{Name: containerName}], 注意，这里没有指明namespace
+			// 如果是非递归，则只获取这一个container就行
 			cont, err := m.getContainer(containerName)
 			if err != nil {
 				return containersMap, err
 			}
 			containersMap[cont.info.Name] = cont
 		} else {
+			// 这个函数的作用其实就是遍历m.containers，然后找到属containerName的所有subcontainer
 			containersMap = m.getSubcontainers(containerName)
 			if len(containersMap) == 0 {
 				return containersMap, fmt.Errorf("unknown container: %q", containerName)
 			}
 		}
-	case v2.TypeDocker, v2.TypePodman:
+	case v2.TypeDocker, v2.TypePodman: // "docker" and "podman"
 		namespace := map[string]string{
 			v2.TypeDocker: DockerNamespace,
 			v2.TypePodman: PodmanNamespace,
 		}[options.IdType]
 		if !options.Recursive {
 			containerName = strings.TrimPrefix(containerName, "/")
+			// 与m.getContainer函数类似，不过指明了namespace
 			cont, err := m.namespacedContainer(containerName, namespace)
 			if err != nil {
 				return containersMap, err
@@ -750,6 +760,7 @@ func (m *manager) getRequestedContainers(containerName string, options v2.Reques
 		waitGroup.Add(len(containersMap))
 		for _, container := range containersMap {
 			go func(cont *containerData) {
+				// 手动触发container的stats收集（更新）
 				cont.OnDemandHousekeeping(*options.MaxAge)
 				waitGroup.Done()
 			}(container)
@@ -910,6 +921,7 @@ func (m *manager) createContainer(containerName string, watchSource watcher.Cont
 	return m.createContainerLocked(containerName, watchSource)
 }
 
+// containerName="/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
 func (m *manager) createContainerLocked(containerName string, watchSource watcher.ContainerWatchSource) error {
 	namespacedName := namespacedContainerName{
 		Name: containerName,
@@ -929,6 +941,7 @@ func (m *manager) createContainerLocked(containerName string, watchSource watche
 		klog.V(4).Infof("ignoring container %q", containerName)
 		return nil
 	}
+	// GenericCollectorManager
 	collectorManager, err := collector.NewCollectorManager()
 	if err != nil {
 		return err
@@ -963,7 +976,7 @@ func (m *manager) createContainerLocked(containerName string, watchSource watche
 
 	// Add collectors
 	labels := handler.GetContainerLabels()
-	collectorConfigs := collector.GetCollectorConfigs(labels)
+	collectorConfigs := collector.GetCollectorConfigs(labels) // collectorConfigs=[]
 	err = m.registerCollectors(collectorConfigs, cont)
 	if err != nil {
 		klog.Warningf("Failed to register collectors for %q: %v", containerName, err)
@@ -1192,6 +1205,7 @@ func (m *manager) watchForNewContainers(quit chan error) error {
 	return nil
 }
 
+// 暂时不关心
 func (m *manager) watchForNewOoms() error {
 	klog.V(2).Infof("Started watching for new ooms in manager")
 	outStream := make(chan *oomparser.OomInstance, 10)
@@ -1268,6 +1282,7 @@ func (m *manager) CloseEventChannel(watchID int) {
 	m.eventHandler.StopWatch(watchID)
 }
 
+// 暂时不关心
 // Parses the events StoragePolicy from the flags.
 func parseEventsStoragePolicy() events.StoragePolicy {
 	policy := events.DefaultStoragePolicy()
@@ -1315,6 +1330,7 @@ func parseEventsStoragePolicy() events.StoragePolicy {
 	return policy
 }
 
+// 暂时不关心
 func (m *manager) DebugInfo() map[string][]string {
 	debugInfo := container.DebugInfo()
 
@@ -1350,6 +1366,7 @@ func (m *manager) DebugInfo() map[string][]string {
 	return debugInfo
 }
 
+// 暂时不关心
 func (m *manager) getFsInfoByDeviceName(deviceName string) (v2.FsInfo, error) {
 	mountPoint, err := m.fsInfo.GetMountpointForDevice(deviceName)
 	if err != nil {
@@ -1370,6 +1387,8 @@ func (m *manager) getFsInfoByDeviceName(deviceName string) (v2.FsInfo, error) {
 func (m *manager) containersInfo(containers map[string]*containerData, query *info.ContainerInfoRequest) (map[string]info.ContainerInfo, error) {
 	output := make(map[string]info.ContainerInfo, len(containers))
 	for name, cont := range containers {
+		// 根据containerData获取containerInfo，containerInfo包含了container以及subContainer的stats
+		// query.NumStats指定了对于一个container返回多少stats
 		inf, err := m.containerDataToContainerInfo(cont, query)
 		if err != nil {
 			// Ignore the error because of race condition and return best-effort result.

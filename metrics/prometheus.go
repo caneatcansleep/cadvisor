@@ -1841,7 +1841,10 @@ func BaseContainerLabels(whiteList []string) func(container *info.ContainerInfo)
 	}
 }
 
+// 主要关心这个函数
 func (c *PrometheusCollector) collectContainersInfo(ch chan<- prometheus.Metric) {
+	// manager.GetRequestedContainersInfo
+	// 这里具体获得一个container还是包含所有的subcontainer，需要看c.opts
 	containers, err := c.infoProvider.GetRequestedContainersInfo("/", c.opts)
 	if err != nil {
 		c.errors.Set(1)
@@ -1908,6 +1911,7 @@ func (c *PrometheusCollector) collectContainersInfo(ch chan<- prometheus.Metric)
 				continue
 			}
 			desc := cm.desc(labels)
+			// cm.getValues是这个cm实现的一个函数，专门用于收集与该cm相关的指标。比如network的cm收集的就是network指标
 			for _, metricValue := range cm.getValues(stats) {
 				ch <- prometheus.NewMetricWithTimestamp(
 					metricValue.timestamp,

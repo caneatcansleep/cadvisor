@@ -59,21 +59,21 @@ var cgroupMemoryPathRegExp = regexp.MustCompile(`memory[^:]*:(.*?)[,;$]`)
 var cgroupCPUPathRegExp = regexp.MustCompile(`cpu[^:]*:(.*?)[,;$]`)
 
 type containerInfo struct {
-	info.ContainerReference
-	Subcontainers []info.ContainerReference
-	Spec          info.ContainerSpec
+	info.ContainerReference // 来自handler.ContainerReference()
+	Subcontainers           []info.ContainerReference
+	Spec                    info.ContainerSpec
 }
 
 type containerData struct {
 	oomEvents                uint64
-	handler                  container.ContainerHandler
+	handler                  container.ContainerHandler // container对应plugin实例化的handler，例如dockerContainerHandler
 	info                     containerInfo
 	memoryCache              *memory.InMemoryCache
 	lock                     sync.Mutex
-	loadReader               cpuload.CpuLoadReader
-	summaryReader            *summary.StatsSummary
-	loadAvg                  float64 // smoothed load average seen so far.
-	loadDAvg                 float64 // smoothed load.d average seen so far.
+	loadReader               cpuload.CpuLoadReader // 不关心
+	summaryReader            *summary.StatsSummary // cadvisor/summary/summary.go
+	loadAvg                  float64               // smoothed load average seen so far.
+	loadDAvg                 float64               // smoothed load.d average seen so far.
 	housekeepingInterval     time.Duration
 	maxHousekeepingInterval  time.Duration
 	allowDynamicHousekeeping bool
@@ -170,6 +170,7 @@ func (cd *containerData) notifyOnDemand() {
 	}
 }
 
+// 注意，此时获取的containerInfo并不包含stats
 func (cd *containerData) GetInfo(shouldUpdateSubcontainers bool) (*containerInfo, error) {
 	// Get spec and subcontainers.
 	if cd.clock.Since(cd.infoLastUpdatedTime) > 5*time.Second || shouldUpdateSubcontainers {
@@ -422,6 +423,8 @@ func (cd *containerData) parsePsLine(line, cadvisorContainer string, inHostNames
 	return &info, nil
 }
 
+// containerName="/system.slice/docker-464f0fe15733400ae042b283498aaa9be4045aa956d7cc0a0675b9cf2b543c4f.scope"
+// handler的动态类型是dockerContainerHandler
 func newContainerData(containerName string, memoryCache *memory.InMemoryCache, handler container.ContainerHandler, logUsage bool, collectorManager collector.CollectorManager, maxHousekeepingInterval time.Duration, allowDynamicHousekeeping bool, clock clock.Clock) (*containerData, error) {
 	if memoryCache == nil {
 		return nil, fmt.Errorf("nil memory storage")
@@ -429,6 +432,7 @@ func newContainerData(containerName string, memoryCache *memory.InMemoryCache, h
 	if handler == nil {
 		return nil, fmt.Errorf("nil container handler")
 	}
+	// return h.reference
 	ref, err := handler.ContainerReference()
 	if err != nil {
 		return nil, err
@@ -463,11 +467,12 @@ func newContainerData(containerName string, memoryCache *memory.InMemoryCache, h
 			cont.loadReader = loadReader
 		}
 	}
-
+	// 这里的spec指info.ContainerSpec，而不是k8s中的spec。这里的spec包含的容器的label，环境变量，是否具有cpu，memory，network等
 	err = cont.updateSpec()
 	if err != nil {
 		return nil, err
 	}
+	// /home/ruge/Desktop/repos/nonctrip/cadvisor/summary/summary.go
 	cont.summaryReader, err = summary.New(cont.info.Spec)
 	if err != nil {
 		cont.summaryReader = nil
@@ -601,6 +606,7 @@ func (cd *containerData) housekeepingTick(timer <-chan time.Time, longHousekeepi
 }
 
 func (cd *containerData) updateSpec() error {
+	// 这里的spec指info.ContainerSpec，而不是k8s中的spec。这里的spec包含的容器的label，环境变量，是否具有cpu，memory，network等
 	spec, err := cd.handler.GetSpec()
 	if err != nil {
 		// Ignore errors if the container is dead.
@@ -644,7 +650,7 @@ func (cd *containerData) updateLoadD(newLoad uint64) {
 }
 
 func (cd *containerData) updateStats() error {
-	stats, statsErr := cd.handler.GetStats()
+	stats, statsErr := cd.handler.GetStats() // rawContainerHandler.GetStats
 	if statsErr != nil {
 		// Ignore errors if the container is dead.
 		if !cd.handler.Exists() {
